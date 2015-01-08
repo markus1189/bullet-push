@@ -20,7 +20,7 @@ executable bullet-push
   ghc-options:         -O2
   -- other-modules:
   -- other-extensions:
-  build-depends:       base >=4.7 && <4.9
+  build-depends:       base >=4.5 && <4.9
                      , bytestring
                      , directory
                      , filepath
