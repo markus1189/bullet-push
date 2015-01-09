@@ -13,25 +13,24 @@ library
   build-depends:       base >= 4.5 && < 4.9
                      , bytestring
                      , http-client
+                     , lens
                      , text
                      , transformers
                      , wreq
+
   default-language:    Haskell2010
 
 executable bullet-push
-  main-is:             Main.hs
+  main-is:             BulletPush.hs
   ghc-options:         -Wall
+  hs-source-dirs:      main
   build-depends:       base >=4.5 && <4.9
                      , bullet-push
-                     , bytestring
                      , directory
                      , filepath
-                     , http-client
-                     , lens
                      , mtl
                      , optparse-applicative
                      , text
                      , transformers
-                     , wreq
 
   default-language:    Haskell2010

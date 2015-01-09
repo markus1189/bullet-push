@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
+module Main (main) where
 
 #if __GLASGOW_HASKELL__ < 710
 import           Control.Applicative ((<*>), (<$>), pure)
@@ -7,23 +8,18 @@ import           Data.Monoid ((<>))
 #endif
 
 import           Control.Exception (SomeException(..), handle)
-import           Control.Lens.Operators
 import           Control.Monad (guard)
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Trans.Maybe (runMaybeT, MaybeT(..))
 import           Data.List (dropWhileEnd)
-import           Data.Monoid (First(..))
 import           Data.Text (Text)
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
-import           Network.Wreq hiding (header)
 import           Options.Applicative
 import           Prelude hiding (log)
 import           System.Directory (getHomeDirectory, doesFileExist)
 import           System.FilePath ((</>))
 
-
-import           Network.BulletPush (push, PushType(..))
+import           Network.BulletPush
 
 defaultTokenFile :: FilePath
 defaultTokenFile = ".bulletpush"
@@ -41,19 +37,17 @@ data CmdlineOpts = CmdlineOpts { givenVerbosity :: Verbosity
 
 log :: Verbosity -> String -> IO ()
 log Normal _ = return ()
-log Verbose s = putStrLn s
+log Verbose s = putStrLn $ "[LOG] " <> s
 
 main :: IO ()
 main = do
   cmdOpts <- execParser cmdlineOpts
-  tokenFilePath' <- tokenFilePath (tokenFile cmdOpts)
-  pbTokenFile <- readTokenFile tokenFilePath'
-  let pbToken = getFirst $ foldMap First [givenToken cmdOpts, pbTokenFile]
+  pbToken <- determineToken cmdOpts
   case pbToken of
-    Nothing -> error "No token given and no ~/.bulletpush file."
+    Nothing -> error "No (valid) token given and/or no (valid) token file."
     Just token -> do
-      log (givenVerbosity cmdOpts) $ "Using token: " ++ (T.unpack token)
-      eitherResponse <- push (opts token) . pushType $ cmdOpts
+      log (givenVerbosity cmdOpts) $ "Using token: " ++ (T.unpack . getToken $ token)
+      eitherResponse <- push token . pushType $ cmdOpts
       case eitherResponse of
         Left e -> log (givenVerbosity cmdOpts) (show e) >> putStrLn "Failed."
         Right _ -> putStrLn "Success."
@@ -62,7 +56,6 @@ main = do
                   ( fullDesc
                     <> progDesc "Push something with pushbullet."
                     <> header "Haskell pushbullet client" )
-    opts t = defaults & auth ?~ oauth2Bearer (T.encodeUtf8 t)
 
 cmds :: Parser CmdlineOpts
 cmds = CmdlineOpts <$> verbosity
@@ -92,15 +85,31 @@ linkParser = Link
          <*> (T.pack <$> argument str (metavar "URL"))
          <*> optional (T.pack <$> argument str (metavar "BODY"))
 
-readTokenFile :: FilePath -> IO (Maybe Text)
+readTokenFile :: FilePath -> IO (Maybe Token)
 readTokenFile path = runMaybeT $ do
   contents <- MaybeT $ maybeReadFile path
   let ls = lines contents
   guard . not . null $ ls
-  return . T.pack . dropWhileEnd (== '\r') . head $ ls
+  MaybeT (return . mkToken . T.pack . dropWhileEnd (== '\r') . head $ ls)
 
 maybeReadFile :: FilePath -> IO (Maybe String)
 maybeReadFile path = handle (\(SomeException _) -> pure Nothing) . runMaybeT $ do
   exists <- liftIO $ doesFileExist path
   guard exists
   liftIO $ readFile path
+
+determineToken :: CmdlineOpts -> IO (Maybe Token)
+determineToken o = do
+  let v = givenVerbosity o
+  case givenToken o of
+    Just t -> do
+      case mkToken t of
+        Just tk -> return $ Just tk
+        Nothing -> do
+          log v "Given token is invalid"
+          return Nothing
+    Nothing -> tryFromFile
+  where tryFromFile = do
+          tokenFilePath' <- tokenFilePath (tokenFile o)
+          log (givenVerbosity o) $ "Trying to read token from file: " ++ tokenFilePath'
+          readTokenFile tokenFilePath'
