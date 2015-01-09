@@ -62,7 +62,8 @@ cmds = CmdlineOpts <$> verbosity
                    <*> optional (T.pack <$> tokenOpt)
                    <*> tokenFileOpt
                    <*> subparser (command "note" (info noteParser (progDesc "Push a note"))
-                   <> command "link" (info linkParser (progDesc "Push a link")))
+                              <> command "link" (info linkParser (progDesc "Push a link"))
+                              <> command "list" (info listParser (progDesc "Push a checklist")))
   where tokenOpt =
           strOption (long "token"
                   <> metavar "TOKEN"
@@ -84,6 +85,11 @@ linkParser = Link
          <$> (T.pack <$> argument str (metavar "TITLE"))
          <*> (T.pack <$> argument str (metavar "URL"))
          <*> optional (T.pack <$> argument str (metavar "BODY"))
+
+listParser :: Parser PushType
+listParser = Checklist
+         <$> (T.pack <$> argument str (metavar "TITLE"))
+         <*> many (T.pack <$> argument str (metavar "ITEM"))
 
 readTokenFile :: FilePath -> IO (Maybe Token)
 readTokenFile path = runMaybeT $ do

@@ -3,7 +3,7 @@
 [![Build Status](https://travis-ci.org/markus1189/BulletPush.png?branch=master)](https://travis-ci.org/markus1189/BulletPush)
 
 Simple haskell client for Pushbullet.  Requires a file "~/.bulletpush"
-with your token.
+with your token or the `--token` argument.
 
 ```
 Haskell pushbullet client
@@ -20,9 +20,13 @@ Available options:
 
 Available commands:
   note                     Push a note
-  link                     Push a link`
+  link                     Push a link
+  list                     Push a checklist`
 ```
 
-Example:
+Examples:
 
-`bullet-push note "My first note" "Hello World"`
+* `bullet-push note "My first note" "Hello World"`
+* `bullet-push link "Check this out"
+  "https://github.com/markus1189/bullet-push"`
+* `bullet-push list todo "todo item 1" "todo item 2"`
