@@ -10,7 +10,8 @@ cabal-version:       >=1.10
 library
   ghc-options:         -Wall
   exposed-modules:     Network.BulletPush
-  build-depends:       base >= 4.5 && < 4.9
+  build-depends:       aeson
+                     , base >= 4.5 && < 4.9
                      , bytestring
                      , http-client
                      , lens
