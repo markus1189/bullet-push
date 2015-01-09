@@ -1,11 +1,28 @@
-# BulletPush #
+# BulletPush [![Build Status](https://travis-ci.org/markus1189/bullet-push.png?branch=master)](https://travis-ci.org/markus1189/bullet-push)
 
-[![Build Status](https://travis-ci.org/markus1189/BulletPush.png?branch=master)](https://travis-ci.org/markus1189/BulletPush)
+## Intro ##
 
-Simple haskell client for (Pushbullet)[https://www.pushbullet.com/].
-Requires either a file `~/.bulletpush` with your token as the sole
-content or the `--token` argument.  You can get a token on your
-(Account Settings)[https://www.pushbullet.com/account] page.
+BulletPush is a simple client for
+[Pushbullet](https://www.pushbullet.com/) written in Haskell.
+
+## Install ##
+
+You can install it via `cabal install`.
+
+In addition to the executable, you need your Pushbullet token.
+Provide it either as a file `~/.bulletpush` with your token as the
+sole content or the `--token` argument.  You can get a token on your
+[Account Settings](https://www.pushbullet.com/account) page.
+
+## Examples ##
+
+```
+bullet-push note "My first note" "Hello World"
+bullet-push -e "email address" link "bullet-push rocks" "https://github.com/markus1189/bullet-push"
+bullet-push list todo "todo item 1" "todo item 2"
+```
+
+## Arguments ##
 
 ```
 Haskell pushbullet client
@@ -27,9 +44,3 @@ Available commands:
   link                     Push a link
   list                     Push a checklist`
 ```
-
-Examples:
-
-* `bullet-push note "My first note" "Hello World"`
-* `bullet-push -e "email address" link "bullet-push rocks" "https://github.com/markus1189/bullet-push"`
-* `bullet-push list todo "todo item 1" "todo item 2"`
