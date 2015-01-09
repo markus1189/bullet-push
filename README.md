@@ -2,8 +2,10 @@
 
 [![Build Status](https://travis-ci.org/markus1189/BulletPush.png?branch=master)](https://travis-ci.org/markus1189/BulletPush)
 
-Simple haskell client for Pushbullet.  Requires a file "~/.bulletpush"
-with your token or the `--token` argument.
+Simple haskell client for (Pushbullet)[https://www.pushbullet.com/].
+Requires either a file `~/.bulletpush` with your token as the sole
+content or the `--token` argument.  You can get a token on your
+(Account Settings)[https://www.pushbullet.com/account] page.
 
 ```
 Haskell pushbullet client
