@@ -30,6 +30,7 @@ tokenFilePath path = (</>) <$> getHomeDirectory <*> pure path
 data Verbosity = Normal | Verbose
 
 data CmdlineOpts = CmdlineOpts { givenVerbosity :: Verbosity
+                               , pushTarget :: PushTarget
                                , givenToken :: Maybe Text
                                , tokenFile :: FilePath
                                , pushType :: PushType
@@ -46,8 +47,9 @@ main = do
   case pbToken of
     Nothing -> error "No (valid) token given and/or no (valid) token file."
     Just token -> do
-      log (givenVerbosity cmdOpts) $ "Using token: " ++ (T.unpack . getToken $ token)
-      eitherResponse <- push token . pushType $ cmdOpts
+      log (givenVerbosity cmdOpts) $ "Using token: " <> (T.unpack . getToken $ token)
+      log (givenVerbosity cmdOpts) $ "Using push target: " <> show (pushTarget cmdOpts)
+      eitherResponse <- pushTo (pushTarget cmdOpts) token . pushType $ cmdOpts
       case eitherResponse of
         Left e -> log (givenVerbosity cmdOpts) (show e) >> putStrLn "Failed."
         Right _ -> putStrLn "Success."
@@ -59,6 +61,7 @@ main = do
 
 cmds :: Parser CmdlineOpts
 cmds = CmdlineOpts <$> verbosity
+                   <*> targetOpt
                    <*> optional (T.pack <$> tokenOpt)
                    <*> tokenFileOpt
                    <*> subparser (command "note" (info noteParser (progDesc "Push a note"))
@@ -74,6 +77,8 @@ cmds = CmdlineOpts <$> verbosity
                   <> help ("Read authentication token from FILE, defaults to: ~/" <> defaultTokenFile)
                   <> value defaultTokenFile)
         verbosity = flag Normal Verbose (long "verbose" <> short 'v' <> help "Enable verbose mode")
+        targetOpt = Email . T.pack <$> strOption (long "email" <> short 'e' <> metavar "EMAIL" <> help "Send push to EMAIL")
+                <|> pure Broadcast
 
 noteParser :: Parser PushType
 noteParser = Note
