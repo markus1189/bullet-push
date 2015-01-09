@@ -17,6 +17,7 @@ library
                      , lens
                      , text
                      , transformers
+                     , unordered-containers
                      , wreq
 
   default-language:    Haskell2010
