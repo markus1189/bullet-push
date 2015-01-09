@@ -21,6 +21,9 @@ data PushType = Note { noteTitle :: Text
                      , linkUrl :: Text
                      , linkBody :: Maybe Text
                      }
+              | Checklist { listTitle :: Text
+                          , listItems :: [Text]
+                          }
               deriving (Eq, Show)
 
 -- Currently no validation
@@ -35,6 +38,10 @@ instance ToJSON PushType where
                                                , "title" .= title
                                                , "url" .= url
                                                ] ++ maybe [] (return . ("body" .=)) maybeBody
+  toJSON (Checklist title items) = object [ "type" .= ("list" :: Text)
+                                          , "title" .= title
+                                          , "items" .= toJSON items
+                                          ]
 
 push :: Token -> PushType -> IO (Either HttpException (Response L.ByteString))
 push (Token t) = liftIO . tryHttpException . postWith opts ep . toJSON
