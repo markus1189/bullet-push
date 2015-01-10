@@ -60,11 +60,16 @@ main = do
 
 processResult :: Verbosity -> Either PushError _ -> IO ()
 processResult _ (Right _) = putStrLn "Success"
-processResult v (Left (PushHttpException e)) = do
-  log v (show e)
-  putStrLn "Error with connection, run with -v to see detailed error"
-processResult _ (Left (PushFileNotFoundException f)) = do
-  putStrLn $ "Could not find file: " ++ f
+processResult v (Left err) = reportError v err
+
+reportError :: Verbosity -> PushError -> IO ()
+reportError v e = log v (show e) >> putStrLn (errorMsgFor e)
+  where errorMsgFor :: PushError -> String
+        errorMsgFor (PushHttpException _) = "Error with connection, run with -v for details"
+        errorMsgFor (PushFileNotFoundException f) = "Could not find file: " ++ f
+        errorMsgFor (PushFileUploadAuthorizationError _) = "Error requesting file upload authorization"
+        errorMsgFor (PushFileUploadError _) = "Error during file upload"
+
 
 cmds :: Parser CmdlineOpts
 cmds = CmdlineOpts <$> verbosity

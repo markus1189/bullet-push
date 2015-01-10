@@ -42,6 +42,9 @@ import           System.FilePath.Lens
 
 data PushError = PushHttpException HttpException
                | PushFileNotFoundException FilePath
+               | PushFileUploadAuthorizationError HttpException
+               | PushFileUploadError HttpException
+               deriving Show
 
 newtype Token = Token { getToken :: Text }
 
@@ -137,10 +140,12 @@ prepareFilePush :: Token -> FilePath -> Maybe Text -> IO (Either PushError PushT
 prepareFilePush token filePath maybeMsgBody = do
   eitherErrorUploadAuth <- requestUpload token (T.pack fileName)
   case eitherErrorUploadAuth of
+    Left (PushHttpException e) -> return (Left (PushFileUploadAuthorizationError e))
     Left e -> return (Left e)
     Right uploadAuth -> do
       eitherErrorUrl <- performUpload filePath uploadAuth
       case eitherErrorUrl of
+        Left (PushHttpException e) -> return (Left (PushFileUploadError e))
         Left e -> return (Left e)
         Right url -> do
           return . Right $ FilePush { filePushPath = fileName
