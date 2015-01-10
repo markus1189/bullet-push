@@ -40,8 +40,9 @@ Available options:
                            ~/.bulletpush
 
 Available commands:
-  note                     Push a note
+  address                  Push an address
+  file                     Push a file
   link                     Push a link
   list                     Push a checklist
-  file                     Push a file
+  note                     Push a note
 ```

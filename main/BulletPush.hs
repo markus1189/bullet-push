@@ -76,10 +76,11 @@ cmds = CmdlineOpts <$> verbosity
                    <*> targetOpt
                    <*> optional (T.pack <$> tokenOpt)
                    <*> tokenFileOpt
-                   <*> subparser (command "note" (info noteParser (progDesc "Push a note"))
+                   <*> subparser (command "address" (info addressParser (progDesc "Push an address"))
+                               <> command "file" (info fileParser (progDesc "Push a file"))
                                <> command "link" (info linkParser (progDesc "Push a link"))
                                <> command "list" (info listParser (progDesc "Push a checklist"))
-                               <> command "file" (info fileParser (progDesc "Push a file")))
+                               <> command "note" (info noteParser (progDesc "Push a note")))
   where tokenOpt =
           strOption (long "token"
                   <> metavar "TOKEN"
@@ -113,6 +114,11 @@ fileParser :: Parser PushType
 fileParser = mkInvalidFilePush
          <$> (argument str (metavar "FILE"))
          <*> optional (T.pack <$> argument str (metavar "BODY"))
+
+addressParser :: Parser PushType
+addressParser = Address
+            <$> (T.pack <$> argument str (metavar "NAME"))
+            <*> (T.pack <$> argument str (metavar "ADDRESS"))
 
 readTokenFile :: FilePath -> IO (Maybe Token)
 readTokenFile path = runMaybeT $ do

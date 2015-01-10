@@ -3,7 +3,7 @@
 module Network.BulletPush ( pushTo
                           , push
 
-                          , PushType (Note, Link, Checklist)
+                          , PushType (Note, Link, Checklist, Address)
                           , noteTitle
                           , noteBody
                           , linkTitle
@@ -62,6 +62,9 @@ data PushType = Note { noteTitle :: Text
               | Checklist { listTitle :: Text
                           , listItems :: [Text]
                           }
+              | Address { addressName :: Text
+                        , addressAddress :: Text
+                        }
               | FilePush { filePushPath :: FilePath
                          , fileType :: Text
                          , fileUrl :: Text
@@ -89,6 +92,10 @@ instance ToJSON PushType where
                                           , "title" .= title
                                           , "items" .= toJSON items
                                           ]
+  toJSON (Address name addr) = object [ "type" .= ("address" :: Text)
+                                      , "name" .= name
+                                      , "address" .= addr
+                                      ]
   toJSON (FilePush name typ url body) = object [ "type" .= ("file" :: Text)
                                                , "file_name" .= name
                                                , "file_type" .= typ
