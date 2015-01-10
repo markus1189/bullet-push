@@ -56,7 +56,7 @@ main = do
     cmdlineOpts = info (helper <*> cmds)
                   ( fullDesc
                     <> progDesc "Push something with pushbullet."
-                    <> header "Haskell pushbullet client" )
+                    <> header "bullet-push, the haskell pushbullet client" )
 
 processResult :: Verbosity -> Either PushError _ -> IO ()
 processResult _ (Right _) = putStrLn "Success"

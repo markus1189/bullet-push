@@ -25,7 +25,7 @@ bullet-push list todo "todo item 1" "todo item 2"
 ## Arguments ##
 
 ```
-Haskell pushbullet client
+bullet-push, the haskell pushbullet client
 
 Usage: bullet-push [-v|--verbose] [-e|--email EMAIL] [--token TOKEN]
                    [--token-file FILE] COMMAND
@@ -42,5 +42,6 @@ Available options:
 Available commands:
   note                     Push a note
   link                     Push a link
-  list                     Push a checklist`
+  list                     Push a checklist
+  file                     Push a file
 ```
