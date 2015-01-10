@@ -1,4 +1,3 @@
-{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Main (main) where
@@ -51,14 +50,14 @@ main = do
       log (givenVerbosity cmdOpts) $ "Using token: " <> (T.unpack . getToken $ token)
       log (givenVerbosity cmdOpts) $ "Using push target: " <> show (pushTarget cmdOpts)
       eitherResponse <- pushTo (pushTarget cmdOpts) token . pushType $ cmdOpts
-      processResult (givenVerbosity cmdOpts) eitherResponse
+      processResult (givenVerbosity cmdOpts) (() <$ eitherResponse)
   where
     cmdlineOpts = info (helper <*> cmds)
                   ( fullDesc
                     <> progDesc "Push something with pushbullet."
                     <> header "bullet-push, the haskell pushbullet client" )
 
-processResult :: Verbosity -> Either PushError _ -> IO ()
+processResult :: Verbosity -> Either PushError () -> IO ()
 processResult _ (Right _) = putStrLn "Success"
 processResult v (Left err) = reportError v err
 
