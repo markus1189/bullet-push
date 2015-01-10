@@ -17,6 +17,7 @@ import qualified Data.Text as T
 import           Options.Applicative
 import           Prelude hiding (log)
 import           System.Directory (getHomeDirectory, doesFileExist)
+import           System.Exit (exitWith, ExitCode(..))
 import           System.FilePath ((</>))
 
 import           Network.BulletPush
@@ -62,7 +63,7 @@ processResult _ (Right _) = putStrLn "Success"
 processResult v (Left err) = reportError v err
 
 reportError :: Verbosity -> PushError -> IO ()
-reportError v e = log v (show e) >> putStrLn (errorMsgFor e)
+reportError v e = log v (show e) >> putStrLn (errorMsgFor e) >> exitWith (ExitFailure 1)
   where errorMsgFor :: PushError -> String
         errorMsgFor (PushHttpException _) = "Error with connection, run with -v for details"
         errorMsgFor (PushFileNotFoundException f) = "Could not find file: " ++ f

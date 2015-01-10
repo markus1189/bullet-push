@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Network.BulletPush ( pushTo
                           , push
@@ -20,6 +21,10 @@ module Network.BulletPush ( pushTo
                           , getToken
                           , mkToken
                           ) where
+
+#if __GLASGOW_HASKELL__ < 710
+import Data.Traversable (traverse)
+#endif
 
 import           Control.Exception (try)
 import           Control.Lens (over, _Left, mapped)
