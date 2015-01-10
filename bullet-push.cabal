@@ -13,8 +13,12 @@ library
   build-depends:       aeson
                      , base >= 4.5 && < 4.9
                      , bytestring
+                     , directory
                      , http-client
+                     , http-types
                      , lens
+                     , lens-aeson
+                     , mime-types
                      , text
                      , transformers
                      , unordered-containers

@@ -1,3 +1,4 @@
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Main (main) where
@@ -50,14 +51,20 @@ main = do
       log (givenVerbosity cmdOpts) $ "Using token: " <> (T.unpack . getToken $ token)
       log (givenVerbosity cmdOpts) $ "Using push target: " <> show (pushTarget cmdOpts)
       eitherResponse <- pushTo (pushTarget cmdOpts) token . pushType $ cmdOpts
-      case eitherResponse of
-        Left e -> log (givenVerbosity cmdOpts) (show e) >> putStrLn "Failed."
-        Right _ -> putStrLn "Success."
+      processResult (givenVerbosity cmdOpts) eitherResponse
   where
     cmdlineOpts = info (helper <*> cmds)
                   ( fullDesc
                     <> progDesc "Push something with pushbullet."
                     <> header "Haskell pushbullet client" )
+
+processResult :: Verbosity -> Either PushError _ -> IO ()
+processResult _ (Right _) = putStrLn "Success"
+processResult v (Left (PushHttpException e)) = do
+  log v (show e)
+  putStrLn "Error with connection, run with -v to see detailed error"
+processResult _ (Left (PushFileNotFoundException f)) = do
+  putStrLn $ "Could not find file: " ++ f
 
 cmds :: Parser CmdlineOpts
 cmds = CmdlineOpts <$> verbosity
@@ -65,8 +72,9 @@ cmds = CmdlineOpts <$> verbosity
                    <*> optional (T.pack <$> tokenOpt)
                    <*> tokenFileOpt
                    <*> subparser (command "note" (info noteParser (progDesc "Push a note"))
-                              <> command "link" (info linkParser (progDesc "Push a link"))
-                              <> command "list" (info listParser (progDesc "Push a checklist")))
+                               <> command "link" (info linkParser (progDesc "Push a link"))
+                               <> command "list" (info listParser (progDesc "Push a checklist"))
+                               <> command "file" (info fileParser (progDesc "Push a file")))
   where tokenOpt =
           strOption (long "token"
                   <> metavar "TOKEN"
@@ -95,6 +103,11 @@ listParser :: Parser PushType
 listParser = Checklist
          <$> (T.pack <$> argument str (metavar "TITLE"))
          <*> many (T.pack <$> argument str (metavar "ITEM"))
+
+fileParser :: Parser PushType
+fileParser = mkInvalidFilePush
+         <$> (argument str (metavar "FILE"))
+         <*> optional (T.pack <$> argument str (metavar "BODY"))
 
 readTokenFile :: FilePath -> IO (Maybe Token)
 readTokenFile path = runMaybeT $ do
