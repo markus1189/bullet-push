@@ -30,6 +30,7 @@ module Network.BulletPush ( pushTo
 
 #if __GLASGOW_HASKELL__ < 710
 import Data.Traversable (traverse)
+import Control.Applicative (pure)
 #endif
 
 import           Control.Exception (try)
