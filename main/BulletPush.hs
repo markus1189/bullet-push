@@ -18,7 +18,7 @@ import qualified Data.Text as T
 import           Options.Applicative
 import           Prelude hiding (log)
 import           System.Directory (getHomeDirectory, doesFileExist)
-import           System.Exit (exitWith, ExitCode(..))
+import           System.Exit (exitWith, ExitCode(..), exitSuccess)
 import           System.FilePath ((</>))
 
 import           Network.BulletPush
@@ -62,7 +62,7 @@ main = do
                     <> header "bullet-push, the haskell pushbullet client" )
 
 processResult :: Verbosity -> Either [PushError] () -> IO ()
-processResult v (Right _) = log v "Success" >> exitWith ExitSuccess
+processResult v (Right _) = log v "Success" >> exitSuccess
 processResult v (Left es) = traverse_ (reportError v) es
 
 reportError :: Verbosity -> PushError -> IO ()
@@ -84,7 +84,7 @@ cmds = CmdlineOpts <$> verbosity
                                <> command "link" (info linkParser (progDesc "Push a link"))
                                <> command "list" (info listParser (progDesc "Push a checklist"))
                                <> command "note" (info noteParser (progDesc "Push a note")))
-                   <*> option auto (long "retries" <> short 'r' <> help ("Number of retries before giving up") <> value 2)
+                   <*> option auto (long "retries" <> short 'r' <> help "Number of retries before giving up" <> value 2)
   where tokenOpt =
           strOption (long "token"
                   <> metavar "TOKEN"
@@ -116,7 +116,7 @@ listParser = Checklist
 
 fileParser :: Parser PushType
 fileParser = mkInvalidFilePush
-         <$> (argument str (metavar "FILE"))
+         <$> argument str (metavar "FILE")
          <*> optional (T.pack <$> argument str (metavar "BODY"))
 
 addressParser :: Parser PushType
@@ -141,12 +141,11 @@ determineToken :: CmdlineOpts -> IO (Maybe Token)
 determineToken o = do
   let v = givenVerbosity o
   case givenToken o of
-    Just t -> do
-      case mkToken t of
-        Just tk -> return $ Just tk
-        Nothing -> do
-          log v "Given token is invalid"
-          return Nothing
+    Just t -> case mkToken t of
+      Just tk -> return $ Just tk
+      Nothing -> do
+        log v "Given token is invalid"
+        return Nothing
     Nothing -> tryFromFile
   where tryFromFile = do
           tokenFilePath' <- tokenFilePath (tokenFile o)

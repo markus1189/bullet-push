@@ -42,8 +42,7 @@ import qualified Data.ByteString.Lazy as L
 import qualified Data.HashMap.Strict as M
 import           Data.Text (Text)
 import qualified Data.Text as T
-import           Data.Text.Encoding (decodeUtf8)
-import           Data.Text.Encoding (encodeUtf8)
+import           Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import           Network.HTTP.Client (HttpException)
 import           Network.Mime (defaultMimeLookup)
 import           Network.Wreq
@@ -83,7 +82,7 @@ data PushType = Note { noteTitle :: Text
               deriving (Eq, Show)
 
 mkInvalidFilePush :: FilePath -> Maybe Text -> PushType
-mkInvalidFilePush filePath msg = FilePush filePath "<unknown>" "<unknown>" msg
+mkInvalidFilePush filePath = FilePush filePath "<unknown>" "<unknown>"
 
 -- Currently no validation
 mkToken :: Text -> Maybe Token
@@ -119,8 +118,7 @@ pushTo :: PushTarget -> Token -> PushType -> IO (Either PushError (Response L.By
 pushTo tgt token@(Token t) (FilePush file _ _ body) = do
   exists <- doesFileExist file
   if not exists
-     then do
-       return (Left (PushFileNotFoundException file))
+     then return (Left (PushFileNotFoundException file))
      else do pushE <- prepareFilePush token file body
              case pushE of
                Left e -> return (Left e)
@@ -171,10 +169,10 @@ prepareFilePush token filePath maybeMsgBody = do
       case eitherErrorUrl of
         Left (PushHttpException e) -> return (Left (PushFileUploadError e))
         Left e -> return (Left e)
-        Right url -> do
+        Right url ->
           return . Right $ FilePush { filePushPath = fileName
                                     , fileType =
-                                        decodeUtf8 . defaultMimeLookup  $ (T.pack fileName)
+                                        decodeUtf8 . defaultMimeLookup  $ T.pack fileName
                                     , fileUrl = url
                                     , fileMsg = maybeMsgBody
                                     }
@@ -201,7 +199,6 @@ performUpload f (UploadAuthorization jsonBlob) = do
          uploadParams ++ [partFileSource "file" f] -- Order is VERY important here
   case res of
     Left e -> return $ Left e
-    Right _ -> do
-      return . Right $ jsonBlob ^?! key "file_url" . _String
+    Right _ -> return . Right $ jsonBlob ^?! key "file_url" . _String
   where ep = jsonBlob ^?! key "upload_url" . _String & T.unpack
         uploadParams = jsonBlob ^@.. key "data" . members . _String & over traverse (uncurry partText)
