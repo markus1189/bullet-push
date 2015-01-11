@@ -7,11 +7,16 @@ module Network.BulletPush ( pushTo
                           , PushType (Note, Link, Checklist, Address)
                           , noteTitle
                           , noteBody
+
                           , linkTitle
                           , linkUrl
                           , linkBody
+
                           , listTitle
                           , listItems
+
+                          , addressName
+                          , addressAddress
 
                           , mkInvalidFilePush
 
