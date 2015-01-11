@@ -2,11 +2,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main (main) where
 
-#if __GLASGOW_HASKELL__ < 710
-import           Control.Applicative ((<*>), (<$>), pure)
-import           Data.Monoid ((<>))
-#endif
-
 import           Control.Exception (SomeException(..), handle)
 import           Control.Monad (guard)
 import           Control.Monad.IO.Class (liftIO)
