@@ -59,7 +59,7 @@ main = do
                     <> header "bullet-push, the haskell pushbullet client" )
 
 processResult :: Verbosity -> Either PushError () -> IO ()
-processResult _ (Right _) = putStrLn "Success"
+processResult v (Right _) = log v "Success" >> exitWith ExitSuccess
 processResult v (Left err) = reportError v err
 
 reportError :: Verbosity -> PushError -> IO ()
