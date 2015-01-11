@@ -11,6 +11,7 @@ import           Control.Exception (SomeException(..), handle)
 import           Control.Monad (guard)
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Trans.Maybe (runMaybeT, MaybeT(..))
+import           Data.Foldable (traverse_)
 import           Data.List (dropWhileEnd)
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -35,6 +36,7 @@ data CmdlineOpts = CmdlineOpts { givenVerbosity :: Verbosity
                                , givenToken :: Maybe Text
                                , tokenFile :: FilePath
                                , pushType :: PushType
+                               , numRetries :: Int
                                }
 
 log :: Verbosity -> String -> IO ()
@@ -50,17 +52,18 @@ main = do
     Just token -> do
       log (givenVerbosity cmdOpts) $ "Using token: " <> (T.unpack . getToken $ token)
       log (givenVerbosity cmdOpts) $ "Using push target: " <> show (pushTarget cmdOpts)
-      eitherResponse <- pushTo (pushTarget cmdOpts) token . pushType $ cmdOpts
-      processResult (givenVerbosity cmdOpts) (() <$ eitherResponse)
+      eitherErrorsResponse <- retry (numRetries cmdOpts) $
+                                    pushTo (pushTarget cmdOpts) token . pushType $ cmdOpts
+      processResult (givenVerbosity cmdOpts) (() <$ eitherErrorsResponse)
   where
     cmdlineOpts = info (helper <*> cmds)
                   ( fullDesc
                     <> progDesc "Push something with pushbullet."
                     <> header "bullet-push, the haskell pushbullet client" )
 
-processResult :: Verbosity -> Either PushError () -> IO ()
+processResult :: Verbosity -> Either [PushError] () -> IO ()
 processResult v (Right _) = log v "Success" >> exitWith ExitSuccess
-processResult v (Left err) = reportError v err
+processResult v (Left es) = traverse_ (reportError v) es
 
 reportError :: Verbosity -> PushError -> IO ()
 reportError v e = log v (show e) >> putStrLn (errorMsgFor e) >> exitWith (ExitFailure 1)
@@ -81,6 +84,7 @@ cmds = CmdlineOpts <$> verbosity
                                <> command "link" (info linkParser (progDesc "Push a link"))
                                <> command "list" (info listParser (progDesc "Push a checklist"))
                                <> command "note" (info noteParser (progDesc "Push a note")))
+                   <*> option auto (long "retries" <> short 'r' <> help ("Number of retries before giving up") <> value 2)
   where tokenOpt =
           strOption (long "token"
                   <> metavar "TOKEN"

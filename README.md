@@ -28,7 +28,7 @@ bullet-push list todo "todo item 1" "todo item 2"
 bullet-push, the haskell pushbullet client
 
 Usage: bullet-push [-v|--verbose] [-e|--email EMAIL] [--token TOKEN]
-                   [--token-file FILE] COMMAND
+                   [--token-file FILE] COMMAND [-r|--retries ARG]
   Push something with pushbullet.
 
 Available options:
@@ -38,6 +38,7 @@ Available options:
   --token TOKEN            Use TOKEN for authentication
   --token-file FILE        Read authentication token from FILE, defaults to:
                            ~/.bulletpush
+  -r,--retries ARG         Number of retries before giving up
 
 Available commands:
   address                  Push an address
