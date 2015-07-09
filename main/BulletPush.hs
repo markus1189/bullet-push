@@ -52,7 +52,7 @@ main = do
     cmdlineOpts = info (helper <*> cmds)
                   ( fullDesc
                     <> progDesc "Push something with pushbullet."
-                    <> header "bullet-push, the haskell pushbullet client" )
+                    <> header "bullet-push - the Haskell pushbullet client" )
     retry cmdOpts = retrying (limitRetries (numRetries cmdOpts) <>
                               constantDelay (1 * 1000 * 1000))
                              (const (\r -> case r of

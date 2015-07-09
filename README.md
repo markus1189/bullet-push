@@ -22,28 +22,9 @@ bullet-push -e "email address" link "bullet-push rocks" "https://github.com/mark
 bullet-push list todo "todo item 1" "todo item 2"
 ```
 
-## Arguments ##
+## Help ##
 
+For a description of comandline arguments and commands, see:
 ```
-bullet-push, the haskell pushbullet client
-
-Usage: bullet-push [-v|--verbose] [-e|--email EMAIL] [--token TOKEN]
-                   [--token-file FILE] COMMAND [-r|--retries ARG]
-  Push something with pushbullet.
-
-Available options:
-  -h,--help                Show this help text
-  -v,--verbose             Enable verbose mode
-  -e,--email EMAIL         Send push to EMAIL
-  --token TOKEN            Use TOKEN for authentication
-  --token-file FILE        Read authentication token from FILE, defaults to:
-                           ~/.bulletpush
-  -r,--retries ARG         Number of retries before giving up
-
-Available commands:
-  address                  Push an address
-  file                     Push a file
-  link                     Push a link
-  list                     Push a checklist
-  note                     Push a note
+$ bullet-push --help
 ```
