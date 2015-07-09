@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Main (main) where
 
 import           Control.Exception (SomeException(..), handle)
@@ -8,7 +9,6 @@ import           Control.Monad.IO.Class (liftIO,MonadIO)
 import           Control.Monad.Logger
 import           Control.Monad.Trans.Maybe (runMaybeT, MaybeT(..))
 import           Control.Retry (retrying,limitRetries,constantDelay)
-import           Data.Either (isLeft)
 import           Data.List (dropWhileEnd)
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -36,21 +36,18 @@ data CmdlineOpts = CmdlineOpts { givenVerbosity :: Verbosity
                                , numRetries :: Int
                                }
 
-log :: (MonadLogger m, MonadIO m) => Verbosity -> String -> m ()
-log Normal _ = return ()
-log Verbose s = liftIO . putStrLn $ "[LOG] " <> s
-
 main :: IO ()
-main = runStdoutLoggingT $ do
+main = do
   cmdOpts <- liftIO (execParser cmdlineOpts)
-  pbToken <- determineToken cmdOpts
-  case pbToken of
-    Nothing -> error "No (valid) token given and/or no (valid) token file."
-    Just token -> do
-      log (givenVerbosity cmdOpts) $ "Using token: " <> (T.unpack . getToken $ token)
-      log (givenVerbosity cmdOpts) $ "Using push target: " <> show (pushTarget cmdOpts)
-      eitherErrorResponse <- retry cmdOpts $ pushTo (pushTarget cmdOpts) token . pushType $ cmdOpts
-      processResult (givenVerbosity cmdOpts) eitherErrorResponse
+  runStdoutLoggingT . filterLogger (logFilter (givenVerbosity cmdOpts)) $ do
+    pbToken <- determineToken cmdOpts
+    case pbToken of
+      Nothing -> error "No (valid) token given and/or no (valid) token file."
+      Just token -> do
+        $logDebug $ "Using token: " <> getToken token
+        $logDebug $ "Using push target: " <> T.pack (show (pushTarget cmdOpts))
+        eitherErrorResponse <- retry cmdOpts $ pushTo (pushTarget cmdOpts) token . pushType $ cmdOpts
+        processResult eitherErrorResponse
   where
     cmdlineOpts = info (helper <*> cmds)
                   ( fullDesc
@@ -58,23 +55,29 @@ main = runStdoutLoggingT $ do
                     <> header "bullet-push, the haskell pushbullet client" )
     retry cmdOpts = retrying (limitRetries (numRetries cmdOpts) <>
                               constantDelay (1 * 1000 * 1000))
-                             (const (return . isLeft))
+                             (const (\r -> case r of
+                                             Right _ -> return False
+                                             Left err -> do
+                                               $logError (errorMsgFor err)
+                                               return True))
+    logFilter Verbose _ _ = True
+    logFilter Normal _ lvl = lvl == LevelInfo
 
-processResult :: (MonadLogger m, MonadIO m) => Verbosity -> Either PushError a -> m ()
-processResult v (Right _) = log v "Success" >> liftIO exitSuccess
-processResult v (Left e) = reportError v e
+processResult :: (MonadLogger m, MonadIO m) => Either PushError a -> m ()
+processResult (Right _) = $logInfo "Success" >> liftIO exitSuccess
+processResult (Left e) = reportError e
 
-reportError :: (MonadLogger m, MonadIO m) => Verbosity -> PushError -> m ()
-reportError v e = do
-  log v (show e)
-  liftIO (putStrLn (errorMsgFor e))
+reportError :: (MonadLogger m, MonadIO m) => PushError -> m ()
+reportError e = do
+  $logDebug (T.pack (show e))
+  liftIO (putStrLn "Unable to push.")
   liftIO (exitWith (ExitFailure 1))
-  where errorMsgFor :: PushError -> String
-        errorMsgFor (PushHttpException _) = "Error with connection, run with -v for details"
-        errorMsgFor (PushFileNotFoundException f) = "Could not find file: " ++ f
-        errorMsgFor (PushFileUploadAuthorizationError _) = "Error requesting file upload authorization"
-        errorMsgFor (PushFileUploadError _) = "Error during file upload"
 
+errorMsgFor :: PushError -> Text
+errorMsgFor (PushHttpException e) = "Error with connection: " <> T.pack (show e)
+errorMsgFor (PushFileNotFoundException f) = "Could not find file: " <> T.pack f
+errorMsgFor (PushFileUploadAuthorizationError _) = "Error requesting file upload authorization"
+errorMsgFor (PushFileUploadError _) = "Error during file upload"
 
 cmds :: Parser CmdlineOpts
 cmds = CmdlineOpts <$> verbosity
@@ -144,16 +147,15 @@ determineToken :: (Applicative m, MonadLogger m, MonadIO m)
                => CmdlineOpts
                -> m (Maybe Token)
 determineToken o = do
-  let v = givenVerbosity o
   case givenToken o of
     Just t -> case mkToken t of
       Just tk -> return $ Just tk
       Nothing -> do
-        log v "Given token is invalid"
+        $logError "Given token is invalid"
         return Nothing
     Nothing -> tryFromFile
   where tryFromFile :: (Applicative m, MonadIO m, MonadLogger m) => m (Maybe Token)
         tryFromFile = do
           tokenFilePath' <- tokenFilePath (tokenFile o)
-          log (givenVerbosity o) $ "Trying to read token from file: " ++ tokenFilePath'
+          $logDebug $ "Trying to read token from file: " <> T.pack tokenFilePath'
           liftIO (readTokenFile tokenFilePath')
