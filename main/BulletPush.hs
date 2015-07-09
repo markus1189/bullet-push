@@ -6,7 +6,8 @@ import           Control.Exception (SomeException(..), handle)
 import           Control.Monad (guard)
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Trans.Maybe (runMaybeT, MaybeT(..))
-import           Data.Foldable (traverse_)
+import           Control.Retry (retrying,limitRetries,constantDelay)
+import           Data.Either (isLeft)
 import           Data.List (dropWhileEnd)
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -47,18 +48,20 @@ main = do
     Just token -> do
       log (givenVerbosity cmdOpts) $ "Using token: " <> (T.unpack . getToken $ token)
       log (givenVerbosity cmdOpts) $ "Using push target: " <> show (pushTarget cmdOpts)
-      eitherErrorsResponse <- retry (numRetries cmdOpts) $
-                                    pushTo (pushTarget cmdOpts) token . pushType $ cmdOpts
-      processResult (givenVerbosity cmdOpts) (() <$ eitherErrorsResponse)
+      eitherErrorResponse <- retry cmdOpts $ pushTo (pushTarget cmdOpts) token . pushType $ cmdOpts
+      processResult (givenVerbosity cmdOpts) eitherErrorResponse
   where
     cmdlineOpts = info (helper <*> cmds)
                   ( fullDesc
                     <> progDesc "Push something with pushbullet."
                     <> header "bullet-push, the haskell pushbullet client" )
+    retry cmdOpts = retrying (limitRetries (numRetries cmdOpts) <>
+                              constantDelay (1 * 1000 * 1000))
+                             (const (return . isLeft))
 
-processResult :: Verbosity -> Either [PushError] () -> IO ()
+processResult :: Verbosity -> Either PushError a -> IO ()
 processResult v (Right _) = log v "Success" >> exitSuccess
-processResult v (Left es) = traverse_ (reportError v) es
+processResult v (Left e) = reportError v e
 
 reportError :: Verbosity -> PushError -> IO ()
 reportError v e = log v (show e) >> putStrLn (errorMsgFor e) >> exitWith (ExitFailure 1)

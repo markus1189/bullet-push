@@ -2,7 +2,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Network.BulletPush ( pushTo
                           , push
-                          , retry
 
                           , PushType (Note, Link, Checklist, Address)
                           , noteTitle
@@ -140,13 +139,6 @@ pushTo tgt (Token t) typ = tryHttpException
 
 push :: Token -> PushType -> IO (Either PushError (Response L.ByteString))
 push = pushTo Broadcast
-
-retry ::  Int -> IO (Either a b) -> IO (Either [a] b)
-retry 0 _ = return (Left [])
-retry 1 act = act <&> over _Left pure
-retry n act = act >>= either leftCase rightCase
-  where rightCase = return . Right
-        leftCase e = retry (n-1) act <&> over _Left (e:)
 
 tryHttpException :: IO a -> IO (Either PushError a)
 tryHttpException = over (mapped . _Left) PushHttpException . try

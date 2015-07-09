@@ -36,6 +36,7 @@ executable bullet-push
                      , filepath
                      , mtl
                      , optparse-applicative
+                     , retry
                      , text
                      , transformers
 
