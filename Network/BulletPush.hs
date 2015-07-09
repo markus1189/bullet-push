@@ -28,13 +28,13 @@ module Network.BulletPush ( pushTo
                           ) where
 
 #if __GLASGOW_HASKELL__ < 710
-import Data.Traversable (traverse)
-import Control.Applicative (pure)
+import           Data.Traversable (traverse)
 #endif
 
-import           Control.Exception (try)
 import           Control.Lens (over, _Left, mapped)
 import           Control.Lens.Operators hiding ((.=))
+import           Control.Monad.Catch (try,MonadCatch)
+import           Control.Monad.IO.Class
 import           Data.Aeson (toJSON, ToJSON, object, (.=))
 import           Data.Aeson.Lens (_JSON, members, _String, key)
 import           Data.Aeson.Types (Pair, Value(Object))
@@ -114,9 +114,13 @@ instance ToJSON PushType where
 -- TODO the special case for FilePush is awkward (creation of push
 -- type in IO handled using `mkInvalidFilePush` and then calling
 -- `prepareFilePush`
-pushTo :: PushTarget -> Token -> PushType -> IO (Either PushError (Response L.ByteString))
+pushTo :: (Functor m, MonadCatch m, MonadIO m)
+       => PushTarget
+       -> Token
+       -> PushType
+       -> m (Either PushError (Response L.ByteString))
 pushTo tgt token@(Token t) (FilePush file _ _ body) = do
-  exists <- doesFileExist file
+  exists <- liftIO (doesFileExist file)
   if not exists
      then return (Left (PushFileNotFoundException file))
      else do pushE <- prepareFilePush token file body
@@ -124,6 +128,7 @@ pushTo tgt token@(Token t) (FilePush file _ _ body) = do
                Left e -> return (Left e)
                Right filePush ->
                  tryHttpException
+                 . liftIO
                  . postWith opts ep
                  . insertTarget tgt
                  . toJSON $ filePush
@@ -131,6 +136,7 @@ pushTo tgt token@(Token t) (FilePush file _ _ body) = do
         opts = defaults & auth ?~ oauth2Bearer (encodeUtf8 t)
 
 pushTo tgt (Token t) typ = tryHttpException
+                           . liftIO
                            . postWith opts ep
                            . insertTarget tgt
                            . toJSON $ typ
@@ -140,7 +146,7 @@ pushTo tgt (Token t) typ = tryHttpException
 push :: Token -> PushType -> IO (Either PushError (Response L.ByteString))
 push = pushTo Broadcast
 
-tryHttpException :: IO a -> IO (Either PushError a)
+tryHttpException :: (MonadCatch m, Functor m, MonadIO m) => m a -> m (Either PushError a)
 tryHttpException = over (mapped . _Left) PushHttpException . try
 
 insertIntoObject :: Pair -> Value -> Value
@@ -151,7 +157,11 @@ insertTarget :: PushTarget -> Value -> Value
 insertTarget Broadcast v = v
 insertTarget (Email addr) v = insertIntoObject ("email" .= addr) v
 
-prepareFilePush :: Token -> FilePath -> Maybe Text -> IO (Either PushError PushType)
+prepareFilePush :: (Functor m, MonadCatch m, MonadIO m)
+                => Token
+                -> FilePath
+                -> Maybe Text
+                -> m (Either PushError PushType)
 prepareFilePush token filePath maybeMsgBody = do
   eitherErrorUploadAuth <- requestUpload token (T.pack fileName)
   case eitherErrorUploadAuth of
@@ -172,12 +182,15 @@ prepareFilePush token filePath maybeMsgBody = do
 
   where fileName = filePath ^. filename
 
-requestUpload :: Token -> Text -> IO (Either PushError UploadAuthorization)
+requestUpload :: (Functor m, MonadCatch m, MonadIO m)
+              => Token
+              -> Text
+              -> m (Either PushError UploadAuthorization)
 requestUpload (Token t) fileName = do
   let mime = decodeUtf8 $ defaultMimeLookup fileName
-  res <- tryHttpException . postWith opts ep $ toJSON $ object [ "file_name" .= fileName
-                                                               , "file_type" .= mime
-                                                               ]
+  res <- tryHttpException . liftIO . postWith opts ep $ toJSON $ object [ "file_name" .= fileName
+                                                                        , "file_type" .= mime
+                                                                        ]
   case res of
     Left e -> return $ Left e
     Right resp -> do
@@ -186,9 +199,12 @@ requestUpload (Token t) fileName = do
   where ep = "https://api.pushbullet.com/v2/upload-request"
         opts = defaults & auth ?~ oauth2Bearer (encodeUtf8 t)
 
-performUpload :: FilePath -> UploadAuthorization -> IO (Either PushError Text)
+performUpload :: (Functor m, MonadCatch m, MonadIO m)
+              => FilePath
+              -> UploadAuthorization
+              -> m (Either PushError Text)
 performUpload f (UploadAuthorization jsonBlob) = do
-  res <- tryHttpException $ post ep $
+  res <- tryHttpException $ liftIO $ post ep $
          uploadParams ++ [partFileSource "file" f] -- Order is VERY important here
   case res of
     Left e -> return $ Left e

@@ -4,7 +4,8 @@ module Main (main) where
 
 import           Control.Exception (SomeException(..), handle)
 import           Control.Monad (guard)
-import           Control.Monad.IO.Class (liftIO)
+import           Control.Monad.IO.Class (liftIO,MonadIO)
+import           Control.Monad.Logger
 import           Control.Monad.Trans.Maybe (runMaybeT, MaybeT(..))
 import           Control.Retry (retrying,limitRetries,constantDelay)
 import           Data.Either (isLeft)
@@ -22,8 +23,8 @@ import           Network.BulletPush
 defaultTokenFile :: FilePath
 defaultTokenFile = ".bulletpush"
 
-tokenFilePath :: FilePath -> IO FilePath
-tokenFilePath path = (</>) <$> getHomeDirectory <*> pure path
+tokenFilePath :: (Applicative m, MonadIO m) => FilePath -> m FilePath
+tokenFilePath path = (</>) <$> liftIO getHomeDirectory <*> pure path
 
 data Verbosity = Normal | Verbose
 
@@ -35,13 +36,13 @@ data CmdlineOpts = CmdlineOpts { givenVerbosity :: Verbosity
                                , numRetries :: Int
                                }
 
-log :: Verbosity -> String -> IO ()
+log :: (MonadLogger m, MonadIO m) => Verbosity -> String -> m ()
 log Normal _ = return ()
-log Verbose s = putStrLn $ "[LOG] " <> s
+log Verbose s = liftIO . putStrLn $ "[LOG] " <> s
 
 main :: IO ()
-main = do
-  cmdOpts <- execParser cmdlineOpts
+main = runStdoutLoggingT $ do
+  cmdOpts <- liftIO (execParser cmdlineOpts)
   pbToken <- determineToken cmdOpts
   case pbToken of
     Nothing -> error "No (valid) token given and/or no (valid) token file."
@@ -59,12 +60,15 @@ main = do
                               constantDelay (1 * 1000 * 1000))
                              (const (return . isLeft))
 
-processResult :: Verbosity -> Either PushError a -> IO ()
-processResult v (Right _) = log v "Success" >> exitSuccess
+processResult :: (MonadLogger m, MonadIO m) => Verbosity -> Either PushError a -> m ()
+processResult v (Right _) = log v "Success" >> liftIO exitSuccess
 processResult v (Left e) = reportError v e
 
-reportError :: Verbosity -> PushError -> IO ()
-reportError v e = log v (show e) >> putStrLn (errorMsgFor e) >> exitWith (ExitFailure 1)
+reportError :: (MonadLogger m, MonadIO m) => Verbosity -> PushError -> m ()
+reportError v e = do
+  log v (show e)
+  liftIO (putStrLn (errorMsgFor e))
+  liftIO (exitWith (ExitFailure 1))
   where errorMsgFor :: PushError -> String
         errorMsgFor (PushHttpException _) = "Error with connection, run with -v for details"
         errorMsgFor (PushFileNotFoundException f) = "Could not find file: " ++ f
@@ -136,7 +140,9 @@ maybeReadFile path = handle (\(SomeException _) -> pure Nothing) . runMaybeT $ d
   guard exists
   liftIO $ readFile path
 
-determineToken :: CmdlineOpts -> IO (Maybe Token)
+determineToken :: (Applicative m, MonadLogger m, MonadIO m)
+               => CmdlineOpts
+               -> m (Maybe Token)
 determineToken o = do
   let v = givenVerbosity o
   case givenToken o of
@@ -146,7 +152,8 @@ determineToken o = do
         log v "Given token is invalid"
         return Nothing
     Nothing -> tryFromFile
-  where tryFromFile = do
+  where tryFromFile :: (Applicative m, MonadIO m, MonadLogger m) => m (Maybe Token)
+        tryFromFile = do
           tokenFilePath' <- tokenFilePath (tokenFile o)
           log (givenVerbosity o) $ "Trying to read token from file: " ++ tokenFilePath'
-          readTokenFile tokenFilePath'
+          liftIO (readTokenFile tokenFilePath')
