@@ -82,7 +82,7 @@ cmds = CmdlineOpts <$> verbosity
                                <> command "link" (info linkParser (progDesc "Push a link"))
                                <> command "list" (info listParser (progDesc "Push a checklist"))
                                <> command "note" (info noteParser (progDesc "Push a note")))
-                   <*> option auto (long "retries" <> short 'r' <> help "Number of retries before giving up" <> value 2)
+                   <*> option auto (long "retries" <> short 'r' <> help "Number of retries before giving up" <> value 2 <> showDefault)
   where tokenOpt =
           strOption (long "token"
                   <> metavar "TOKEN"
@@ -90,8 +90,9 @@ cmds = CmdlineOpts <$> verbosity
         tokenFileOpt =
           strOption (long "token-file"
                   <> metavar "FILE"
-                  <> help ("Read authentication token from FILE, defaults to: ~/" <> defaultTokenFile)
-                  <> value defaultTokenFile)
+                  <> help ("Read authentication token from FILE")
+                  <> value defaultTokenFile
+                  <> showDefaultWith ("~/"<>))
         verbosity = flag Normal Verbose (long "verbose" <> short 'v' <> help "Enable verbose mode")
         targetOpt = Email . T.pack <$> strOption (long "email" <> short 'e' <> metavar "EMAIL" <> help "Send push to EMAIL")
                 <|> pure Broadcast
