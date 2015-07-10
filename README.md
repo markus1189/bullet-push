@@ -1,4 +1,4 @@
-# BulletPush [![Build Status](https://travis-ci.org/markus1189/bullet-push.png?branch=master)](https://travis-ci.org/markus1189/bullet-push)
+# BulletPush [![Build Status](https://travis-ci.org/markus1189/bullet-push.png?branch=master)](https://travis-ci.org/markus1189/bullet-push) [![License](https://img.shields.io/github/license/markus1189/bullet-push.svg)](https://img.shields.io/github/license/markus1189/bullet-push.svg)
 
 ## Intro ##
 
