@@ -1,6 +1,7 @@
 name:                bullet-push
 version:             0.3.2.0
 synopsis:            bullet-push - the Haskell pushbullet client
+description:         bullet-push is a commandline client for Pushbullet.
 category:            Tools
 license:             GPL-3
 license-file:        LICENSE
@@ -8,6 +9,10 @@ author:              Markus Hauck
 maintainer:          markus1189@gmail.com
 build-type:          Simple
 cabal-version:       >=1.10
+
+source-repository head
+  type: git
+  location: git://github.com/markus1189/bullet-push.git
 
 library
   ghc-options:         -Wall
