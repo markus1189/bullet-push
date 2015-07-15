@@ -28,7 +28,7 @@ defaultTokenFile = ".bulletpush"
 tokenFilePath :: (Applicative m, MonadIO m) => FilePath -> m FilePath
 tokenFilePath path = (</>) <$> liftIO getHomeDirectory <*> pure path
 
-data Verbosity = Normal | Verbose
+data Verbosity = Normal | Verbose | Quiet
 
 data CmdlineOpts = CmdlineOpts { givenVerbosity :: Verbosity
                                , pushTarget :: PushTarget
@@ -73,6 +73,7 @@ main = do
                                                return True))
     logFilter Verbose _ _ = True
     logFilter Normal _ lvl = lvl == LevelInfo
+    logFilter Quiet _ _ = False
 
 processResult :: (MonadLogger m, MonadIO m) => Either PushError a -> m ()
 processResult (Right _) = $logInfo "Success" >> liftIO exitSuccess
@@ -111,7 +112,12 @@ cmds = CmdlineOpts <$> verbosity
                   <> help ("Read authentication token from FILE")
                   <> value defaultTokenFile
                   <> showDefaultWith ("~/"<>))
-        verbosity = flag Normal Verbose (long "verbose" <> short 'v' <> help "Enable verbose mode")
+        verbosity = flag Normal
+                         Verbose
+                         (long "verbose" <> short 'v' <> help "Enable verbose mode")
+                <|> flag Normal
+                         Quiet
+                         (long "quiet" <> short 'q' <> help "Don't print output")
         targetOpt = Email . T.pack <$> strOption (long "email" <> short 'e' <> metavar "EMAIL" <> help "Send push to EMAIL")
                 <|> pure Broadcast
 
