@@ -9,14 +9,16 @@ import           Control.Monad.IO.Class (liftIO,MonadIO)
 import           Control.Monad.Logger
 import           Control.Monad.Trans.Maybe (runMaybeT, MaybeT(..))
 import           Control.Retry (retrying,limitRetries,constantDelay)
+import qualified Data.ByteString.Char8 as B
+import           Data.Char (toLower)
 import           Data.List (dropWhileEnd)
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Options.Applicative
-import           Prelude hiding (log)
 import           System.Directory (getHomeDirectory, doesFileExist)
 import           System.Exit (exitWith, ExitCode(..), exitSuccess)
 import           System.FilePath ((</>))
+import           System.Log.FastLogger (fromLogStr)
 
 import           Network.BulletPush
 
@@ -36,10 +38,19 @@ data CmdlineOpts = CmdlineOpts { givenVerbosity :: Verbosity
                                , numRetries :: Int
                                }
 
+
+logger :: Loc -> LogSource -> LogLevel -> LogStr -> IO ()
+logger loc src LevelDebug msg =
+  B.putStr . fromLogStr $ defaultLogStr loc src LevelDebug msg
+logger _ _ level msg = B.putStrLn (lvl <> fromLogStr msg)
+  where lvl = case level of
+                LevelInfo -> ""
+                _ -> B.pack ("[" ++ map toLower (drop 5 (show level)) ++ "] ")
+
 main :: IO ()
 main = do
   cmdOpts <- liftIO (execParser cmdlineOpts)
-  runStdoutLoggingT . filterLogger (logFilter (givenVerbosity cmdOpts)) $ do
+  flip runLoggingT logger . filterLogger (logFilter (givenVerbosity cmdOpts)) $ do
     pbToken <- determineToken cmdOpts
     case pbToken of
       Nothing -> error "No (valid) token given and/or no (valid) token file."

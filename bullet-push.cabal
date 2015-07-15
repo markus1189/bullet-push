@@ -40,9 +40,11 @@ executable bullet-push
   hs-source-dirs:      main
   build-depends:       base >=4.5 && <4.9
                      , bullet-push
+                     , bytestring
                      , directory
-                     , monad-logger
+                     , fast-logger
                      , filepath
+                     , monad-logger
                      , mtl
                      , optparse-applicative
                      , retry
