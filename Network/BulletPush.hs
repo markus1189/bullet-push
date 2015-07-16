@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Network.BulletPush ( pushTo
                           , push
+                          , listDevices
 
                           , PushType (Note, Link, Checklist, Address)
                           , noteTitle
@@ -36,7 +37,7 @@ import           Control.Lens.Operators hiding ((.=))
 import           Control.Monad.Catch (try,MonadCatch)
 import           Control.Monad.IO.Class
 import           Data.Aeson (toJSON, ToJSON, object, (.=))
-import           Data.Aeson.Lens (_JSON, members, _String, key)
+import           Data.Aeson.Lens (_JSON, members, _String, key, values)
 import           Data.Aeson.Types (Pair, Value(Object))
 import qualified Data.ByteString.Lazy as L
 import qualified Data.HashMap.Strict as M
@@ -57,7 +58,7 @@ data PushError = PushHttpException HttpException
 
 newtype Token = Token { getToken :: Text }
 
-data PushTarget = Broadcast | Email Text deriving Show
+data PushTarget = Broadcast | Email Text | DeviceIden Text deriving Show
 
 newtype UploadAuthorization = UploadAuthorization Value deriving Show
 
@@ -154,8 +155,10 @@ insertIntoObject (k,v) (Object o) = Object $ M.insert k v o
 insertIntoObject _ v = v
 
 insertTarget :: PushTarget -> Value -> Value
+insertTarget (DeviceIden iden) v = insertIntoObject ("device_iden" .= iden) v
 insertTarget Broadcast v = v
 insertTarget (Email addr) v = insertIntoObject ("email" .= addr) v
+
 
 prepareFilePush :: (Functor m, MonadCatch m, MonadIO m)
                 => Token
@@ -211,3 +214,14 @@ performUpload f (UploadAuthorization jsonBlob) = do
     Right _ -> return . Right $ jsonBlob ^?! key "file_url" . _String
   where ep = jsonBlob ^?! key "upload_url" . _String & T.unpack
         uploadParams = jsonBlob ^@.. key "data" . members . _String & over traverse (uncurry partText)
+
+listDevices :: (Functor m, MonadCatch m, MonadIO m)
+            => Token
+            -> m (Either PushError [(Text, Text)])
+listDevices (Token t) = tryHttpException $ do
+  r <- liftIO (getWith opts ep)
+  let idens = r ^.. responseBody . key "devices" . values . key "iden" . _String
+      nicks = r ^.. responseBody . key "devices" . values . key "nickname" . _String
+  return $ zip nicks idens
+  where ep = "https://api.pushbullet.com/v2/devices"
+        opts = defaults & auth ?~ oauth2Bearer (encodeUtf8 t)

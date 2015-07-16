@@ -34,7 +34,7 @@ data PushToken = TokenFile FilePath | TokenString Text
 data CmdlineOpts = CmdlineOpts { givenVerbosity :: Verbosity
                                , pushTarget :: PushTarget
                                , pushToken :: PushToken
-                               , pushType :: PushType
+                               , pushType :: Action
                                , numRetries :: Int
                                }
 
@@ -59,12 +59,21 @@ main = do
         liftIO (exitWith (ExitFailure 1))
       Just token -> do
         $logDebug $ "Using token: " <> getToken token
-        $logDebug $ "Using push target: " <> T.pack (show (pushTarget cmdOpts))
-        eitherErrorResponse <- retry cmdOpts
-                             . pushTo (pushTarget cmdOpts) token
-                             . pushType
-                             $ cmdOpts
-        processResult eitherErrorResponse
+        case pushType cmdOpts of
+          NewPush typ -> do
+            $logDebug $ "Using push target: " <> T.pack (show (pushTarget cmdOpts))
+            eitherErrorResponse <- retry cmdOpts
+                                 . pushTo (pushTarget cmdOpts) token
+                                 $ typ
+
+            processResult eitherErrorResponse
+          ListDevices -> do
+            eitherDevs <- retry cmdOpts (listDevices token)
+            case eitherDevs of
+              Left e -> reportError e
+              Right devs ->  do
+                let nicks = map (("- " <>) . fst) devs
+                $logInfo (T.intercalate "\n" ("Available devices: " : nicks))
   where
     cmdlineOpts defTokenPath = info (helper <*> (cmds defTokenPath))
                                ( fullDesc
@@ -76,6 +85,7 @@ main = do
                (\n r ->
                   case r of
                     Right _ -> return False
+                    Left (PushFileNotFoundException _) -> return False
                     Left err -> do
                       $logError ("Retry " <> T.pack (show n) <> ": " <> errorMsgFor err)
                       return True)
@@ -90,7 +100,7 @@ processResult (Left e) = reportError e
 reportError :: (MonadLogger m, MonadIO m) => PushError -> m ()
 reportError e = do
   $logDebug (T.pack (show e))
-  liftIO (putStrLn "Unable to push.")
+  $logInfo "Unable to push."
   liftIO (exitWith (ExitFailure 1))
 
 errorMsgFor :: PushError -> Text
@@ -103,21 +113,26 @@ errorMsgFor (PushFileUploadAuthorizationError _) =
 errorMsgFor (PushFileUploadError _) =
   "Error during file upload"
 
+data Action = NewPush PushType | ListDevices
+
 cmds :: FilePath -> Parser CmdlineOpts
 cmds defTokenPath =
   CmdlineOpts <$> verbosity
               <*> targetOpt
               <*> tokenOpt
-              <*> subparser (command "address"
-                                     (info addressParser (progDesc "Push an address"))
-                          <> command "file"
-                                     (info fileParser (progDesc "Push a file"))
-                          <> command "link"
-                                     (info linkParser (progDesc "Push a link"))
-                          <> command "list"
-                                     (info listParser (progDesc "Push a checklist"))
-                          <> command "note"
-                                     (info noteParser (progDesc "Push a note")))
+              <*> ((NewPush <$>
+                    subparser (command "address"
+                                       (info addressParser (progDesc "Push an address"))
+                            <> command "file"
+                                       (info fileParser (progDesc "Push a file"))
+                            <> command "link"
+                                       (info linkParser (progDesc "Push a link"))
+                            <> command "list"
+                                       (info listParser (progDesc "Push a checklist"))
+                            <> command "note"
+                                       (info noteParser (progDesc "Push a note"))))
+              <|> (subparser (command "list"
+                                      (info (pure ListDevices) (progDesc "List your devices")))))
               <*> option auto (long "retries" <>
                                short 'r' <>
                                help "Number of retries before giving up" <>
