@@ -25,15 +25,15 @@ import           Network.BulletPush
 defaultTokenFile :: FilePath
 defaultTokenFile = ".bulletpush"
 
-tokenFilePath :: (Applicative m, MonadIO m) => FilePath -> m FilePath
-tokenFilePath path = (</>) <$> liftIO getHomeDirectory <*> pure path
+defaultTokenFilePath :: (Applicative m, MonadIO m) => m FilePath
+defaultTokenFilePath = (</>) <$> liftIO getHomeDirectory <*> pure defaultTokenFile
 
 data Verbosity = Normal | Verbose | Quiet
+data PushToken = TokenFile FilePath | TokenString Text
 
 data CmdlineOpts = CmdlineOpts { givenVerbosity :: Verbosity
                                , pushTarget :: PushTarget
-                               , givenToken :: Maybe Text
-                               , tokenFile :: FilePath
+                               , pushToken :: PushToken
                                , pushType :: PushType
                                , numRetries :: Int
                                }
@@ -49,28 +49,33 @@ logger _ _ level msg = B.putStrLn (lvl <> fromLogStr msg)
 
 main :: IO ()
 main = do
-  cmdOpts <- liftIO (execParser cmdlineOpts)
+  defTokenPath <- defaultTokenFilePath
+  cmdOpts <- liftIO (execParser (cmdlineOpts defTokenPath))
   flip runLoggingT logger . filterLogger (logFilter (givenVerbosity cmdOpts)) $ do
     pbToken <- determineToken cmdOpts
     case pbToken of
-      Nothing -> error "No (valid) token given and/or no (valid) token file."
+      Nothing -> do
+        $logError "No (valid) token given and/or no (valid) token file."
+        liftIO (exitWith (ExitFailure 1))
       Just token -> do
         $logDebug $ "Using token: " <> getToken token
         $logDebug $ "Using push target: " <> T.pack (show (pushTarget cmdOpts))
         eitherErrorResponse <- retry cmdOpts $ pushTo (pushTarget cmdOpts) token . pushType $ cmdOpts
         processResult eitherErrorResponse
   where
-    cmdlineOpts = info (helper <*> cmds)
-                  ( fullDesc
-                    <> progDesc "Push something with pushbullet."
-                    <> header "bullet-push - the Haskell pushbullet client" )
-    retry cmdOpts = retrying (limitRetries (numRetries cmdOpts) <>
-                              constantDelay (1 * 1000 * 1000))
-                             (const (\r -> case r of
-                                             Right _ -> return False
-                                             Left err -> do
-                                               $logError (errorMsgFor err)
-                                               return True))
+    cmdlineOpts defTokenPath = info (helper <*> (cmds defTokenPath))
+                               ( fullDesc
+                                 <> progDesc "Push something with pushbullet."
+                                 <> header "bullet-push - the Haskell pushbullet client" )
+    retry cmdOpts =
+      retrying (limitRetries (numRetries cmdOpts) <>
+                constantDelay (1 * 1000 * 1000))
+               (\n r ->
+                  case r of
+                    Right _ -> return False
+                    Left err -> do
+                      $logError ("Retry " <> T.pack (show n) <> ": " <> errorMsgFor err)
+                      return True)
     logFilter Verbose _ _ = True
     logFilter Normal _ lvl = lvl == LevelInfo
     logFilter Quiet _ _ = False
@@ -91,34 +96,45 @@ errorMsgFor (PushFileNotFoundException f) = "Could not find file: " <> T.pack f
 errorMsgFor (PushFileUploadAuthorizationError _) = "Error requesting file upload authorization"
 errorMsgFor (PushFileUploadError _) = "Error during file upload"
 
-cmds :: Parser CmdlineOpts
-cmds = CmdlineOpts <$> verbosity
-                   <*> targetOpt
-                   <*> optional (T.pack <$> tokenOpt)
-                   <*> tokenFileOpt
-                   <*> subparser (command "address" (info addressParser (progDesc "Push an address"))
-                               <> command "file" (info fileParser (progDesc "Push a file"))
-                               <> command "link" (info linkParser (progDesc "Push a link"))
-                               <> command "list" (info listParser (progDesc "Push a checklist"))
-                               <> command "note" (info noteParser (progDesc "Push a note")))
-                   <*> option auto (long "retries" <> short 'r' <> help "Number of retries before giving up" <> value 2 <> showDefault)
-  where tokenOpt =
-          strOption (long "token"
-                  <> metavar "TOKEN"
-                  <> help "Use TOKEN for authentication")
-        tokenFileOpt =
-          strOption (long "token-file"
-                  <> metavar "FILE"
-                  <> help ("Read authentication token from FILE")
-                  <> value defaultTokenFile
-                  <> showDefaultWith ("~/"<>))
+cmds :: FilePath -> Parser CmdlineOpts
+cmds defTokenPath =
+  CmdlineOpts <$> verbosity
+              <*> targetOpt
+              <*> tokenOpt
+              <*> subparser (command "address"
+                                     (info addressParser (progDesc "Push an address"))
+                          <> command "file"
+                                     (info fileParser (progDesc "Push a file"))
+                          <> command "link"
+                                     (info linkParser (progDesc "Push a link"))
+                          <> command "list"
+                                     (info listParser (progDesc "Push a checklist"))
+                          <> command "note"
+                                     (info noteParser (progDesc "Push a note")))
+              <*> option auto (long "retries" <>
+                               short 'r' <>
+                               help "Number of retries before giving up" <>
+                               value 2 <>
+                               showDefault)
+  where tokenOpt = TokenString . T.pack <$> strOption (long "token" <>
+                                                       metavar "TOKEN" <>
+                                                       help "Use TOKEN for authentication")
+               <|> TokenFile <$> strOption (long "token-file" <>
+                                            metavar "FILE" <>
+                                            help ("Read authentication token from FILE") <>
+                                            value defTokenPath <>
+                                            showDefault)
         verbosity = flag Normal
                          Verbose
                          (long "verbose" <> short 'v' <> help "Enable verbose mode")
                 <|> flag Normal
                          Quiet
                          (long "quiet" <> short 'q' <> help "Don't print output")
-        targetOpt = Email . T.pack <$> strOption (long "email" <> short 'e' <> metavar "EMAIL" <> help "Send push to EMAIL")
+        targetOpt = Email . T.pack
+                <$> strOption (long "email" <>
+                               short 'e' <>
+                               metavar "EMAIL" <>
+                               help "Send push to EMAIL")
                 <|> pure Broadcast
 
 noteParser :: Parser PushType
@@ -164,15 +180,12 @@ determineToken :: (Applicative m, MonadLogger m, MonadIO m)
                => CmdlineOpts
                -> m (Maybe Token)
 determineToken o = do
-  case givenToken o of
-    Just t -> case mkToken t of
-      Just tk -> return $ Just tk
-      Nothing -> do
-        $logError "Given token is invalid"
-        return Nothing
-    Nothing -> tryFromFile
-  where tryFromFile :: (Applicative m, MonadIO m, MonadLogger m) => m (Maybe Token)
-        tryFromFile = do
-          tokenFilePath' <- tokenFilePath (tokenFile o)
-          $logDebug $ "Trying to read token from file: " <> T.pack tokenFilePath'
-          liftIO (readTokenFile tokenFilePath')
+  case pushToken o of
+    TokenString t -> case mkToken t of
+                       Just tk -> return $ Just tk
+                       Nothing -> do
+                         $logError "Given token is invalid"
+                         return Nothing
+    TokenFile file -> do
+      $logDebug $ "Trying to read token from file: " <> T.pack file
+      liftIO (readTokenFile file)
