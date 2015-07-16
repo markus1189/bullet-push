@@ -60,7 +60,10 @@ main = do
       Just token -> do
         $logDebug $ "Using token: " <> getToken token
         $logDebug $ "Using push target: " <> T.pack (show (pushTarget cmdOpts))
-        eitherErrorResponse <- retry cmdOpts $ pushTo (pushTarget cmdOpts) token . pushType $ cmdOpts
+        eitherErrorResponse <- retry cmdOpts
+                             . pushTo (pushTarget cmdOpts) token
+                             . pushType
+                             $ cmdOpts
         processResult eitherErrorResponse
   where
     cmdlineOpts defTokenPath = info (helper <*> (cmds defTokenPath))
@@ -91,10 +94,14 @@ reportError e = do
   liftIO (exitWith (ExitFailure 1))
 
 errorMsgFor :: PushError -> Text
-errorMsgFor (PushHttpException e) = "Error with connection: " <> T.pack (show e)
-errorMsgFor (PushFileNotFoundException f) = "Could not find file: " <> T.pack f
-errorMsgFor (PushFileUploadAuthorizationError _) = "Error requesting file upload authorization"
-errorMsgFor (PushFileUploadError _) = "Error during file upload"
+errorMsgFor (PushHttpException e) =
+  "Error with connection: " <> T.pack (show e)
+errorMsgFor (PushFileNotFoundException f) =
+  "Could not find file: " <> T.pack f
+errorMsgFor (PushFileUploadAuthorizationError _) =
+  "Error requesting file upload authorization"
+errorMsgFor (PushFileUploadError _) =
+  "Error during file upload"
 
 cmds :: FilePath -> Parser CmdlineOpts
 cmds defTokenPath =
