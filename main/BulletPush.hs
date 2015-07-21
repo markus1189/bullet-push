@@ -34,8 +34,8 @@ data PushToken = TokenFile FilePath | TokenString Text
 data CmdlineOpts = CmdlineOpts { givenVerbosity :: Verbosity
                                , pushTarget :: PushTarget
                                , pushToken :: PushToken
-                               , pushType :: Action
                                , numRetries :: Int
+                               , pushAction :: Action
                                }
 
 
@@ -57,9 +57,8 @@ main = do
       Nothing -> do
         $logError "No (valid) token given and/or no (valid) token file."
         liftIO (exitWith (ExitFailure 1))
-      Just token -> do
-        $logDebug $ "Using token: " <> getToken token
-        case pushType cmdOpts of
+      Just token ->
+        case pushAction cmdOpts of
           NewPush typ -> do
             $logDebug $ "Using push target: " <> T.pack (show (pushTarget cmdOpts))
             eitherErrorResponse <- retry cmdOpts
@@ -87,8 +86,11 @@ main = do
                   case r of
                     Right _ -> return False
                     Left (PushFileNotFoundException _) -> return False
+                    Left PushInvalidDeviceIdentifier -> return False
                     Left err -> do
-                      $logError ("Retry " <> T.pack (show n) <> ": " <> errorMsgFor err)
+                      $logError ("Retry " <> T.pack (show (n + 1)) <> "/" <>
+                                 T.pack (show (numRetries cmdOpts)) <> ": " <>
+                                 errorMsgFor err)
                       return True)
     logFilter Verbose _ lvl = lvl > LevelDebug
     logFilter Normal _ lvl = lvl == LevelInfo
@@ -122,47 +124,58 @@ data Action = NewPush PushType | ListDevices
 
 cmds :: FilePath -> Parser CmdlineOpts
 cmds defTokenPath =
-  CmdlineOpts <$> verbosity
+  CmdlineOpts <$> verbosityOpt
               <*> targetOpt
-              <*> tokenOpt
-              <*> ((NewPush <$>
-                    subparser (command "address"
-                                       (info addressParser (progDesc "Push an address"))
-                            <> command "file"
-                                       (info fileParser (progDesc "Push a file"))
-                            <> command "link"
-                                       (info linkParser (progDesc "Push a link"))
-                            <> command "list"
-                                       (info listParser (progDesc "Push a checklist"))
-                            <> command "note"
-                                       (info noteParser (progDesc "Push a note"))))
-              <|> (subparser (command "list"
-                                      (info (pure ListDevices) (progDesc "List your devices")))))
-              <*> option auto (long "retries" <>
-                               short 'r' <>
-                               help "Number of retries before giving up" <>
-                               value 2 <>
+              <*> tokenOpt defTokenPath
+              <*> retriesOpt
+              <*> subparser (address <> file <> link <> list <> note <> device)
+  where address = command "address" (info (NewPush <$> addressParser) (progDesc "Push an address"))
+        file = command "file" (info (NewPush <$> fileParser) (progDesc "Push a file"))
+        link = command "link"(info (NewPush <$> linkParser) (progDesc "Push a link"))
+        list = command "list"(info (NewPush <$> listParser) (progDesc "Push a checklist"))
+        note = command "note"(info (NewPush <$> noteParser) (progDesc "Push a note"))
+        device = command "devices"(info (pure ListDevices) (progDesc "List your devices"))
+
+tokenOpt :: String -> Parser PushToken
+tokenOpt defTokenPath =
+      TokenString . T.pack <$> strOption (long "token" <>
+                                          metavar "TOKEN" <>
+                                          help "Use TOKEN for authentication")
+  <|> TokenFile <$> strOption (long "token-file" <>
+                               metavar "FILE" <>
+                               help ("Read authentication token from FILE") <>
+                               value defTokenPath <>
                                showDefault)
-  where tokenOpt = TokenString . T.pack <$> strOption (long "token" <>
-                                                       metavar "TOKEN" <>
-                                                       help "Use TOKEN for authentication")
-               <|> TokenFile <$> strOption (long "token-file" <>
-                                            metavar "FILE" <>
-                                            help ("Read authentication token from FILE") <>
-                                            value defTokenPath <>
-                                            showDefault)
-        verbosity = flag Normal
-                         Verbose
-                         (long "verbose" <> short 'v' <> help "Enable verbose mode")
-                <|> flag Normal
-                         Quiet
-                         (long "quiet" <> short 'q' <> help "Don't print output")
-        targetOpt = Email . T.pack
-                <$> strOption (long "email" <>
-                               short 'e' <>
-                               metavar "EMAIL" <>
-                               help "Send push to EMAIL")
-                <|> pure Broadcast
+
+verbosityOpt :: Parser Verbosity
+verbosityOpt = flag' Verbose
+                     (long "verbose" <> short 'v' <> help "Enable verbose mode")
+           <|> flag' Quiet
+                     (long "quiet" <> short 'q' <> help "Don't print output")
+           <|> flag' Debug
+                     (long "debug" <> help "Print debugging output")
+           <|> pure Normal
+
+targetOpt :: Parser PushTarget
+targetOpt = Email . T.pack
+                  <$> strOption (long "email" <>
+                                 short 'e' <>
+                                 metavar "EMAIL" <>
+                                 help "Send push to EMAIL")
+                  <|> DeviceIden . T.pack
+                  <$> strOption (long "iden" <>
+                                 short 'i' <>
+                                 metavar "IDEN" <>
+                                 help "Send push to device with identifier IDEN")
+                  <|> pure Broadcast
+
+retriesOpt :: Parser Int
+retriesOpt = option auto
+                    (long "retries" <>
+                     short 'r' <>
+                     help "Number of retries before giving up" <>
+                     value 3 <>
+                     showDefault)
 
 noteParser :: Parser PushType
 noteParser = Note
