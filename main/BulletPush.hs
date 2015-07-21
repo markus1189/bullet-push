@@ -28,7 +28,7 @@ defaultTokenFile = ".bulletpush"
 defaultTokenFilePath :: (Applicative m, MonadIO m) => m FilePath
 defaultTokenFilePath = (</>) <$> liftIO getHomeDirectory <*> pure defaultTokenFile
 
-data Verbosity = Normal | Verbose | Quiet
+data Verbosity = Normal | Verbose | Quiet | Debug
 data PushToken = TokenFile FilePath | TokenString Text
 
 data CmdlineOpts = CmdlineOpts { givenVerbosity :: Verbosity
@@ -70,15 +70,16 @@ main = do
           ListDevices -> do
             eitherDevs <- retry cmdOpts (listDevices token)
             case eitherDevs of
-              Left e -> reportError e
+              Left e -> do reportError e
               Right devs ->  do
-                let nicks = map (("- " <>) . fst) devs
+                let nicks = map (\(nick,iden) -> ("- " <> nick <> ": " <> iden))
+                                devs
                 $logInfo (T.intercalate "\n" ("Available devices: " : nicks))
   where
     cmdlineOpts defTokenPath = info (helper <*> (cmds defTokenPath))
                                ( fullDesc
                                  <> progDesc "Push something with pushbullet."
-                                 <> header "bullet-push - the Haskell pushbullet client" )
+                                 <> header "bullet-push - the Pushbullet client" )
     retry cmdOpts =
       retrying (limitRetries (numRetries cmdOpts) <>
                 constantDelay (1 * 1000 * 1000))
@@ -89,9 +90,10 @@ main = do
                     Left err -> do
                       $logError ("Retry " <> T.pack (show n) <> ": " <> errorMsgFor err)
                       return True)
-    logFilter Verbose _ _ = True
+    logFilter Verbose _ lvl = lvl > LevelDebug
     logFilter Normal _ lvl = lvl == LevelInfo
     logFilter Quiet _ _ = False
+    logFilter Debug _ _ = True
 
 processResult :: (MonadLogger m, MonadIO m) => Either PushError a -> m ()
 processResult (Right _) = $logInfo "Success" >> liftIO exitSuccess
@@ -100,6 +102,7 @@ processResult (Left e) = reportError e
 reportError :: (MonadLogger m, MonadIO m) => PushError -> m ()
 reportError e = do
   $logDebug (T.pack (show e))
+  $logError (errorMsgFor e)
   $logInfo "Unable to push."
   liftIO (exitWith (ExitFailure 1))
 
@@ -112,6 +115,8 @@ errorMsgFor (PushFileUploadAuthorizationError _) =
   "Error requesting file upload authorization"
 errorMsgFor (PushFileUploadError _) =
   "Error during file upload"
+errorMsgFor PushInvalidDeviceIdentifier =
+  "Invalid device identifier"
 
 data Action = NewPush PushType | ListDevices
 
