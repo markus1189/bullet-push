@@ -1,5 +1,5 @@
 name:                bullet-push
-version:             0.3.2.1
+version:             0.3.2.2
 synopsis:            bullet-push - the Haskell pushbullet client
 description:         bullet-push is a commandline client for Pushbullet.
 category:            Tools
