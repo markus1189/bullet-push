@@ -40,11 +40,12 @@ import           Data.Aeson (toJSON, ToJSON, object, (.=))
 import           Data.Aeson.Lens (_JSON, members, _String, key, values)
 import           Data.Aeson.Types (Pair, Value(Object))
 import qualified Data.ByteString.Lazy as L
+import qualified Data.ByteString as BS
 import qualified Data.HashMap.Strict as M
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Text.Encoding (decodeUtf8, encodeUtf8)
-import           Network.HTTP.Client (HttpException)
+import           Network.HTTP.Client (HttpException(StatusCodeException))
 import           Network.Mime (defaultMimeLookup)
 import           Network.Wreq
 import           System.Directory (doesFileExist)
@@ -54,6 +55,7 @@ data PushError = PushHttpException HttpException
                | PushFileNotFoundException FilePath
                | PushFileUploadAuthorizationError HttpException
                | PushFileUploadError HttpException
+               | PushInvalidDeviceIdentifier
                deriving Show
 
 newtype Token = Token { getToken :: Text }
@@ -148,7 +150,18 @@ push :: Token -> PushType -> IO (Either PushError (Response L.ByteString))
 push = pushTo Broadcast
 
 tryHttpException :: (MonadCatch m, Functor m, MonadIO m) => m a -> m (Either PushError a)
-tryHttpException = over (mapped . _Left) PushHttpException . try
+tryHttpException act = do
+  r <- over (mapped . _Left) PushHttpException . try $ act
+  case r of
+    Left ex -> case ex of
+                 PushHttpException (StatusCodeException _ hs _) ->
+                   if isInvalidDeviceName hs
+                   then return (Left PushInvalidDeviceIdentifier)
+                   else return r
+                 _ -> return r
+    Right _ -> return r
+  where isInvalidDeviceName hs =
+          any (BS.isInfixOf "The param 'device_iden' has an invalid value" . snd) hs
 
 insertIntoObject :: Pair -> Value -> Value
 insertIntoObject (k,v) (Object o) = Object $ M.insert k v o
