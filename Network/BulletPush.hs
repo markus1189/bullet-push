@@ -4,19 +4,13 @@ module Network.BulletPush ( pushTo
                           , push
                           , listDevices
 
-                          , PushType (Note, Link, Checklist, Address)
+                          , PushType (Note, Link)
                           , noteTitle
                           , noteBody
 
                           , linkTitle
                           , linkUrl
                           , linkBody
-
-                          , listTitle
-                          , listItems
-
-                          , addressName
-                          , addressAddress
 
                           , mkInvalidFilePush
 
@@ -71,12 +65,6 @@ data PushType = Note { noteTitle :: Text
                      , linkUrl :: Text
                      , linkBody :: Maybe Text
                      }
-              | Checklist { listTitle :: Text
-                          , listItems :: [Text]
-                          }
-              | Address { addressName :: Text
-                        , addressAddress :: Text
-                        }
               | FilePush { filePushPath :: FilePath
                          , fileType :: Text
                          , fileUrl :: Text
@@ -100,14 +88,6 @@ instance ToJSON PushType where
                                                , "title" .= title
                                                , "url" .= url
                                                ] ++ maybe [] (return . ("body" .=)) maybeBody
-  toJSON (Checklist title items) = object [ "type" .= ("list" :: Text)
-                                          , "title" .= title
-                                          , "items" .= toJSON items
-                                          ]
-  toJSON (Address name addr) = object [ "type" .= ("address" :: Text)
-                                      , "name" .= name
-                                      , "address" .= addr
-                                      ]
   toJSON (FilePush name typ url body) = object [ "type" .= ("file" :: Text)
                                                , "file_name" .= name
                                                , "file_type" .= typ
@@ -160,8 +140,8 @@ tryHttpException act = do
                    else return r
                  _ -> return r
     Right _ -> return r
-  where isInvalidDeviceName hs =
-          any (BS.isInfixOf "The param 'device_iden' has an invalid value" . snd) hs
+  where isInvalidDeviceName =
+          any (BS.isInfixOf "The param 'device_iden' has an invalid value" . snd)
 
 insertIntoObject :: Pair -> Value -> Value
 insertIntoObject (k,v) (Object o) = Object $ M.insert k v o

@@ -69,13 +69,13 @@ main = do
           ListDevices -> do
             eitherDevs <- retry cmdOpts (listDevices token)
             case eitherDevs of
-              Left e -> do reportError e
+              Left e -> reportError e
               Right devs ->  do
                 let nicks = map (\(nick,iden) -> ("- " <> nick <> ": " <> iden))
                                 devs
                 $logInfo (T.intercalate "\n" ("Available devices: " : nicks))
   where
-    cmdlineOpts defTokenPath = info (helper <*> (cmds defTokenPath))
+    cmdlineOpts defTokenPath = info (helper <*> cmds defTokenPath)
                                ( fullDesc
                                  <> progDesc "Push something with pushbullet."
                                  <> header "bullet-push - the Pushbullet client" )
@@ -128,11 +128,9 @@ cmds defTokenPath =
               <*> targetOpt
               <*> tokenOpt defTokenPath
               <*> retriesOpt
-              <*> subparser (address <> file <> link <> list <> note <> device)
-  where address = command "address" (info (NewPush <$> addressParser) (progDesc "Push an address"))
-        file = command "file" (info (NewPush <$> fileParser) (progDesc "Push a file"))
+              <*> subparser (file <> link <> note <> device)
+  where file = command "file" (info (NewPush <$> fileParser) (progDesc "Push a file"))
         link = command "link"(info (NewPush <$> linkParser) (progDesc "Push a link"))
-        list = command "list"(info (NewPush <$> listParser) (progDesc "Push a checklist"))
         note = command "note"(info (NewPush <$> noteParser) (progDesc "Push a note"))
         device = command "devices"(info (pure ListDevices) (progDesc "List your devices"))
 
@@ -143,7 +141,7 @@ tokenOpt defTokenPath =
                                           help "Use TOKEN for authentication")
   <|> TokenFile <$> strOption (long "token-file" <>
                                metavar "FILE" <>
-                               help ("Read authentication token from FILE") <>
+                               help "Read authentication token from FILE" <>
                                value defTokenPath <>
                                showDefault)
 
@@ -188,20 +186,10 @@ linkParser = Link
          <*> (T.pack <$> argument str (metavar "URL"))
          <*> optional (T.pack <$> argument str (metavar "BODY"))
 
-listParser :: Parser PushType
-listParser = Checklist
-         <$> (T.pack <$> argument str (metavar "TITLE"))
-         <*> many (T.pack <$> argument str (metavar "ITEM"))
-
 fileParser :: Parser PushType
 fileParser = mkInvalidFilePush
          <$> argument str (metavar "FILE")
          <*> optional (T.pack <$> argument str (metavar "BODY"))
-
-addressParser :: Parser PushType
-addressParser = Address
-            <$> (T.pack <$> argument str (metavar "NAME"))
-            <*> (T.pack <$> argument str (metavar "ADDRESS"))
 
 readTokenFile :: FilePath -> IO (Maybe Token)
 readTokenFile path = runMaybeT $ do
@@ -219,7 +207,7 @@ maybeReadFile path = handle (\(SomeException _) -> pure Nothing) . runMaybeT $ d
 determineToken :: (Applicative m, MonadLogger m, MonadIO m)
                => CmdlineOpts
                -> m (Maybe Token)
-determineToken o = do
+determineToken o =
   case pushToken o of
     TokenString t -> case mkToken t of
                        Just tk -> return $ Just tk
